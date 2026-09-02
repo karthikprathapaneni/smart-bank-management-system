@@ -1,0 +1,11 @@
+target/
+*.class
+*.ser
+*.log
+audit_log.txt
+test_bank_data.ser
+test_audit_log.txt
+.idea/
+*.iml
+.vscode/
+.DS_Store
