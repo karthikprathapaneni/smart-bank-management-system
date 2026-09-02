@@ -14,13 +14,16 @@ import java.awt.event.ActionListener;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.IOException;
+import java.sql.Connection;
+import java.sql.DatabaseMetaData;
+import java.sql.SQLException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
 /**
- * Production-grade Java AWT User Interface for the Smart Bank Management System.
+ * Production-grade Java AWT User Interface for the Smart Bank Management System (SBMS).
  * Adheres strictly to the Java Delegation Event Model (AWT components, layout managers,
- * and event listener architecture).
+ * and event listener architecture) with full live MySQL JDBC integration controls.
  */
 public class SmartBankGUI extends Frame implements ActionListener {
     private static final long serialVersionUID = 1L;
@@ -34,6 +37,17 @@ public class SmartBankGUI extends Frame implements ActionListener {
     private Label lblTotalBalance;
     private Label lblTotalAccounts;
     private Label lblTotalCustomers;
+
+    // Direct MySQL JDBC Connection Bar
+    private TextField txtDbHost;
+    private TextField txtDbPort;
+    private TextField txtDbName;
+    private TextField txtDbUser;
+    private TextField txtDbPassword;
+    private Button btnTestDbConn;
+    private Button btnSaveToDb;
+    private Button btnLoadFromDb;
+    private Label lblDbStatus;
 
     // Direct Operations Panel
     private Choice choiceAccountSelect;
@@ -76,7 +90,7 @@ public class SmartBankGUI extends Frame implements ActionListener {
     private java.awt.List listLogConsole;
 
     public SmartBankGUI(BankEngine engine) {
-        super("Smart Bank Management System (SBMS) - Enterprise Desktop Console");
+        super("Smart Bank Management System (SBMS) - Enterprise Desktop Console (CSA09)");
         this.engine = engine;
         this.persistenceManager = new PersistenceManager();
 
@@ -89,12 +103,10 @@ public class SmartBankGUI extends Frame implements ActionListener {
 
     private void initializeComponents() {
         // Typography & Colors
-        Font titleFont = new Font("SansSerif", Font.BOLD, 16);
-        Font subTitleFont = new Font("SansSerif", Font.BOLD, 12);
-        Font plainFont = new Font("SansSerif", Font.PLAIN, 12);
+        Font titleFont = new Font("SansSerif", Font.BOLD, 15);
 
         // Header
-        lblBankTitle = new Label("SMART BANK MANAGEMENT SYSTEM - CSA09", Label.CENTER);
+        lblBankTitle = new Label("SMART BANK MANAGEMENT SYSTEM - CSA09 ENTERPRISE", Label.CENTER);
         lblBankTitle.setFont(titleFont);
         lblBankTitle.setBackground(new Color(24, 43, 73));
         lblBankTitle.setForeground(Color.WHITE);
@@ -103,13 +115,26 @@ public class SmartBankGUI extends Frame implements ActionListener {
         lblTotalAccounts = new Label("Accounts: 0", Label.CENTER);
         lblTotalCustomers = new Label("Customers: 0", Label.RIGHT);
 
+        // MySQL Connection Bar Components
+        txtDbHost = new TextField("localhost", 9);
+        txtDbPort = new TextField("3306", 4);
+        txtDbName = new TextField("smart_bank_db", 10);
+        txtDbUser = new TextField("root", 6);
+        txtDbPassword = new TextField("", 8);
+        txtDbPassword.setEchoChar('*');
+        btnTestDbConn = new Button("Test JDBC Conn");
+        btnSaveToDb = new Button("Sync to MySQL");
+        btnLoadFromDb = new Button("Load from MySQL");
+        lblDbStatus = new Label("[DB: Standby / In-Memory]", Label.LEFT);
+        lblDbStatus.setForeground(new Color(0, 100, 0));
+
         // Operations
         choiceAccountSelect = new Choice();
         txtAmount = new TextField(10);
         txtReference = new TextField(12);
         btnDeposit = new Button("Deposit Funds");
         btnWithdraw = new Button("Withdraw Funds");
-        btnApplyInterest = new Button("Apply Interest (Savings)");
+        btnApplyInterest = new Button("Apply Interest");
         btnCheckBalance = new Button("View Account Details");
 
         // Transfers
@@ -140,9 +165,9 @@ public class SmartBankGUI extends Frame implements ActionListener {
         btnRegisterCustomer = new Button("Register New Customer");
 
         // Persistence
-        btnSerializeSnapshot = new Button("Save Binary State (bank_data.ser)");
-        btnDeserializeSnapshot = new Button("Load Binary State");
-        btnRefreshData = new Button("Refresh Console Views");
+        btnSerializeSnapshot = new Button("Save State (bank_data.ser)");
+        btnDeserializeSnapshot = new Button("Load State (bank_data.ser)");
+        btnRefreshData = new Button("Refresh Views");
 
         // Log Console
         listLogConsole = new java.awt.List(12, false);
@@ -151,23 +176,43 @@ public class SmartBankGUI extends Frame implements ActionListener {
     }
 
     private void layoutUI() {
-        setLayout(new BorderLayout(8, 8));
+        setLayout(new BorderLayout(6, 6));
         setBackground(new Color(230, 235, 242));
 
-        // 1. TOP HEADER & METRIC SUMMARY
-        Panel topPanel = new Panel(new BorderLayout());
-        topPanel.add(lblBankTitle, BorderLayout.NORTH);
+        // 1. TOP HEADER & METRIC SUMMARY & MYSQL BAR
+        Panel topContainer = new Panel(new BorderLayout());
+        topContainer.add(lblBankTitle, BorderLayout.NORTH);
 
         Panel summaryBar = new Panel(new GridLayout(1, 3, 10, 0));
         summaryBar.setBackground(new Color(210, 220, 235));
         summaryBar.add(lblTotalBalance);
         summaryBar.add(lblTotalAccounts);
         summaryBar.add(lblTotalCustomers);
-        topPanel.add(summaryBar, BorderLayout.SOUTH);
-        add(topPanel, BorderLayout.NORTH);
+        topContainer.add(summaryBar, BorderLayout.CENTER);
+
+        // MySQL DB Connection Panel
+        Panel dbBar = new Panel(new FlowLayout(FlowLayout.LEFT, 4, 3));
+        dbBar.setBackground(new Color(220, 230, 245));
+        dbBar.add(new Label("MySQL Host:"));
+        dbBar.add(txtDbHost);
+        dbBar.add(new Label("Port:"));
+        dbBar.add(txtDbPort);
+        dbBar.add(new Label("DB:"));
+        dbBar.add(txtDbName);
+        dbBar.add(new Label("User:"));
+        dbBar.add(txtDbUser);
+        dbBar.add(new Label("Pass:"));
+        dbBar.add(txtDbPassword);
+        dbBar.add(btnTestDbConn);
+        dbBar.add(btnSaveToDb);
+        dbBar.add(btnLoadFromDb);
+        dbBar.add(lblDbStatus);
+        topContainer.add(dbBar, BorderLayout.SOUTH);
+
+        add(topContainer, BorderLayout.NORTH);
 
         // 2. CENTER WORKSPACE (Grid of Panels)
-        Panel centerPanel = new Panel(new GridLayout(2, 2, 10, 10));
+        Panel centerPanel = new Panel(new GridLayout(2, 2, 8, 8));
 
         // Section A: Direct Account Transactions
         Panel pnlDirectOps = new Panel(new BorderLayout(5, 5));
@@ -185,7 +230,7 @@ public class SmartBankGUI extends Frame implements ActionListener {
         pnlDirectInputs.add(txtReference);
         pnlDirectOps.add(pnlDirectInputs, BorderLayout.CENTER);
 
-        Panel pnlDirectButtons = new Panel(new FlowLayout(FlowLayout.CENTER, 5, 5));
+        Panel pnlDirectButtons = new Panel(new FlowLayout(FlowLayout.CENTER, 4, 4));
         pnlDirectButtons.add(btnDeposit);
         pnlDirectButtons.add(btnWithdraw);
         pnlDirectButtons.add(btnApplyInterest);
@@ -273,14 +318,14 @@ public class SmartBankGUI extends Frame implements ActionListener {
 
         // 3. BOTTOM AUDIT TRAIL / REAL-TIME LOG LIST
         Panel bottomPanel = new Panel(new BorderLayout(4, 4));
-        Label lblLogTitle = new Label("Audit Trail & System Notification Console:", Label.LEFT);
+        Label lblLogTitle = new Label("Real-Time Audit Trail & System Event Console:", Label.LEFT);
         lblLogTitle.setFont(new Font("SansSerif", Font.BOLD, 11));
         bottomPanel.add(lblLogTitle, BorderLayout.NORTH);
         bottomPanel.add(listLogConsole, BorderLayout.CENTER);
 
         add(bottomPanel, BorderLayout.SOUTH);
 
-        setSize(1000, 720);
+        setSize(1080, 760);
         setLocationRelativeTo(null);
     }
 
@@ -295,6 +340,11 @@ public class SmartBankGUI extends Frame implements ActionListener {
         btnSerializeSnapshot.addActionListener(this);
         btnDeserializeSnapshot.addActionListener(this);
         btnRefreshData.addActionListener(this);
+
+        // MySQL Event Listeners
+        btnTestDbConn.addActionListener(this);
+        btnSaveToDb.addActionListener(this);
+        btnLoadFromDb.addActionListener(this);
 
         // Window closing adapter
         addWindowListener(new WindowAdapter() {
@@ -334,6 +384,12 @@ public class SmartBankGUI extends Frame implements ActionListener {
             } else if (src == btnRefreshData) {
                 refreshAllChoicesAndSummary();
                 logMessage("INFO", "Console state refreshed successfully.");
+            } else if (src == btnTestDbConn) {
+                handleTestDbConnection();
+            } else if (src == btnSaveToDb) {
+                handleSaveToDatabase();
+            } else if (src == btnLoadFromDb) {
+                handleLoadFromDatabase();
             }
         } catch (InsufficientBalanceException ex) {
             logMessage("INSUFFICIENT_FUNDS", ex.getMessage());
@@ -530,6 +586,73 @@ public class SmartBankGUI extends Frame implements ActionListener {
         }
     }
 
+    // =========================================================================
+    // Live MySQL Database JDBC Handlers
+    // =========================================================================
+    private String getDbJdbcUrl() {
+        String host = txtDbHost.getText().trim().isEmpty() ? "localhost" : txtDbHost.getText().trim();
+        String port = txtDbPort.getText().trim().isEmpty() ? "3306" : txtDbPort.getText().trim();
+        String db = txtDbName.getText().trim().isEmpty() ? "smart_bank_db" : txtDbName.getText().trim();
+        return String.format("jdbc:mysql://%s:%s/%s?createDatabaseIfNotExist=true&useSSL=false&allowPublicKeyRetrieval=true&serverTimezone=UTC",
+                host, port, db);
+    }
+
+    private void handleTestDbConnection() {
+        String url = getDbJdbcUrl();
+        String user = txtDbUser.getText().trim();
+        String pass = txtDbPassword.getText().trim();
+
+        try (Connection conn = persistenceManager.getConnection(url, user, pass)) {
+            DatabaseMetaData meta = conn.getMetaData();
+            lblDbStatus.setText("[DB: Connected to MySQL]");
+            lblDbStatus.setForeground(new Color(0, 120, 0));
+            logMessage("MYSQL_SUCCESS", String.format("Connected to %s (%s) via JDBC driver %s",
+                    meta.getDatabaseProductName(), meta.getDatabaseProductVersion(), meta.getDriverVersion()));
+        } catch (SQLException ex) {
+            lblDbStatus.setText("[DB: Connection Failed]");
+            lblDbStatus.setForeground(Color.RED);
+            logMessage("MYSQL_ERROR", "Failed to connect to MySQL: " + ex.getMessage());
+        }
+    }
+
+    private void handleSaveToDatabase() {
+        String url = getDbJdbcUrl();
+        String user = txtDbUser.getText().trim();
+        String pass = txtDbPassword.getText().trim();
+
+        try (Connection conn = persistenceManager.getConnection(url, user, pass)) {
+            persistenceManager.saveToDatabase(engine, conn);
+            lblDbStatus.setText("[DB: Synchronized]");
+            lblDbStatus.setForeground(new Color(0, 120, 0));
+            logMessage("MYSQL_SUCCESS", String.format("Successfully saved %d Customers and %d Accounts into MySQL tables!",
+                    engine.getAllCustomers().size(), engine.getAllAccounts().size()));
+        } catch (SQLException ex) {
+            lblDbStatus.setText("[DB: Sync Failed]");
+            lblDbStatus.setForeground(Color.RED);
+            logMessage("MYSQL_ERROR", "MySQL Save Error: " + ex.getMessage());
+        }
+    }
+
+    private void handleLoadFromDatabase() {
+        String url = getDbJdbcUrl();
+        String user = txtDbUser.getText().trim();
+        String pass = txtDbPassword.getText().trim();
+
+        try (Connection conn = persistenceManager.getConnection(url, user, pass)) {
+            engine.clear();
+            persistenceManager.loadFromDatabase(engine, conn);
+            lblDbStatus.setText("[DB: Loaded from MySQL]");
+            lblDbStatus.setForeground(new Color(0, 120, 0));
+            logMessage("MYSQL_SUCCESS", String.format("Loaded %d Customers and %d Accounts directly from MySQL!",
+                    engine.getAllCustomers().size(), engine.getAllAccounts().size()));
+            refreshAllChoicesAndSummary();
+        } catch (Exception ex) {
+            lblDbStatus.setText("[DB: Load Failed]");
+            lblDbStatus.setForeground(Color.RED);
+            logMessage("MYSQL_ERROR", "MySQL Load Error: " + ex.getMessage());
+        }
+    }
+
     private void persistenceManagerAppendAudit(Transaction txn) {
         try {
             persistenceManager.appendAuditLog(txn, "audit_log.txt");
@@ -570,7 +693,7 @@ public class SmartBankGUI extends Frame implements ActionListener {
 
     private void logMessage(String level, String msg) {
         String timestamp = LocalDateTime.now().format(TIME_FMT);
-        String formatted = String.format("[%s] [%-12s] %s", timestamp, level, msg);
+        String formatted = String.format("[%s] [%-14s] %s", timestamp, level, msg);
         listLogConsole.add(formatted, 0); // Prepend to top
         if (listLogConsole.getItemCount() > 200) {
             listLogConsole.remove(200);

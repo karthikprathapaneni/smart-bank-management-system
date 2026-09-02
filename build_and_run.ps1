@@ -44,24 +44,30 @@ if ($Action -eq "compile") {
     exit 0
 }
 
-# 2. Download JUnit Standalone Runner if missing
+# Download JUnit & MySQL connector if missing
 if (-not (Test-Path $junitJar)) {
     Write-Host "Fetching JUnit 5 Console Standalone Runner..." -ForegroundColor Yellow
     Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/org/junit/platform/junit-platform-console-standalone/1.10.2/junit-platform-console-standalone-1.10.2.jar" -OutFile $junitJar
+}
+
+$mysqlJar = Join-Path $libDir "mysql-connector-j-8.3.0.jar"
+if (-not (Test-Path $mysqlJar)) {
+    Write-Host "Fetching MySQL Connector/J JDBC Driver..." -ForegroundColor Yellow
+    Invoke-WebRequest -Uri "https://repo1.maven.org/maven2/com/mysql/mysql-connector-j/8.3.0/mysql-connector-j-8.3.0.jar" -OutFile $mysqlJar
 }
 
 # 3. Compile & Run Tests
 if ($Action -eq "test" -or $Action -eq "all") {
     Write-Host "[2/3] Compiling test sources..." -ForegroundColor Yellow
     $testSources = Get-ChildItem -Path (Join-Path $projectRoot "src\test\java") -Filter "*.java" -Recurse | ForEach-Object { $_.FullName }
-    & $javac -cp "$classesDir;$junitJar" -d $testClassesDir -encoding UTF-8 $testSources
+    & $javac -cp "$classesDir;$junitJar;$mysqlJar" -d $testClassesDir -encoding UTF-8 $testSources
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Test source compilation failed!"
         exit 1
     }
 
     Write-Host "[3/3] Executing JUnit 5 Test Suites & Concurrency Stress Test..." -ForegroundColor Yellow
-    & $java -jar $junitJar --class-path "$classesDir;$testClassesDir" --scan-class-path --fail-if-no-tests
+    & $java -jar $junitJar --class-path "$classesDir;$testClassesDir;$mysqlJar" --scan-class-path --fail-if-no-tests
     if ($LASTEXITCODE -ne 0) {
         Write-Error "Unit or Concurrency Tests Failed!"
         exit 1
@@ -72,5 +78,11 @@ if ($Action -eq "test" -or $Action -eq "all") {
 # 4. Launch GUI if requested
 if ($Action -eq "run") {
     Write-Host "Launching Smart Bank AWT GUI Console..." -ForegroundColor Cyan
-    & $java -cp $classesDir com.smartbank.Main
+    & $java -cp "$classesDir;$mysqlJar" com.smartbank.Main
+}
+
+# 5. Launch Live MySQL Interactive Demo if requested
+if ($Action -eq "db-demo") {
+    Write-Host "Launching Smart Bank Live MySQL JDBC Demo..." -ForegroundColor Cyan
+    & $java -cp "$classesDir;$mysqlJar" com.smartbank.DatabaseDemo
 }
