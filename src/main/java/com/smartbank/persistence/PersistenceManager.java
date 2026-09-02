@@ -118,7 +118,11 @@ public class PersistenceManager {
      * @throws SQLException on connection failure
      */
     public Connection getConnection(String url, String user, String password) throws SQLException {
-        return DriverManager.getConnection(url, user, password);
+        return DBConnection.getConnection(url, user, password);
+    }
+
+    public Connection getConnection() throws SQLException {
+        return DBConnection.getConnection();
     }
 
     /**
